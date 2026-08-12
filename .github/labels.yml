@@ -1,0 +1,66 @@
+# Taxonomía de labels para triaje automático de issues (ver .github/workflows/claude-issue-triage.yml)
+# name / color (sin '#') / description
+
+# type/* — naturaleza del issue
+- name: "type/bug"
+  color: "d73a4a"
+  description: "Algo no funciona como se espera"
+- name: "type/feature"
+  color: "a2eeef"
+  description: "Nueva funcionalidad o mejora"
+- name: "type/refactor"
+  color: "cfd3d7"
+  description: "Cambio interno sin alterar comportamiento"
+- name: "type/docs"
+  color: "0075ca"
+  description: "Documentación (README, CLAUDE.md, comentarios)"
+- name: "type/chore"
+  color: "e4e669"
+  description: "Mantenimiento, workflows, tareas de infraestructura"
+
+# area/* — zona del código afectada (ver arquitectura en CLAUDE.md)
+- name: "area/gameplay"
+  color: "5319e7"
+  description: "Colisión, rotación, wall kicks, loop de juego, spawn"
+- name: "area/rendering"
+  color: "5319e7"
+  description: "Dibujo en canvas: draw(), drawNext(), ghost piece"
+- name: "area/input"
+  color: "5319e7"
+  description: "Controles de teclado"
+- name: "area/scoring"
+  color: "5319e7"
+  description: "Puntuación, niveles, dropInterval"
+- name: "area/ui"
+  color: "5319e7"
+  description: "index.html, style.css, layout visual"
+- name: "area/build"
+  color: "5319e7"
+  description: "Workflows, repo, documentación de infraestructura"
+
+# priority/*
+- name: "priority/high"
+  color: "b60205"
+  description: "Bloquea o rompe el juego"
+- name: "priority/medium"
+  color: "fbca04"
+  description: "Molesto pero no bloqueante"
+- name: "priority/low"
+  color: "0e8a16"
+  description: "Cosmético o de bajo impacto"
+
+# complexity/* — tamaño estimado del cambio
+- name: "complexity/small"
+  color: "c2e0c6"
+  description: "Cambio acotado a una función o archivo"
+- name: "complexity/medium"
+  color: "f9d0c4"
+  description: "Toca varias funciones o archivos"
+- name: "complexity/large"
+  color: "e99695"
+  description: "Cambio estructural o de varios subsistemas"
+
+# estado
+- name: "needs-info"
+  color: "d4c5f9"
+  description: "Falta información para diagnosticar o implementar"

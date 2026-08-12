@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(powershell -NoProfile -ExecutionPolicy Bypass -File .claude/skills/clima/scripts/clima.ps1:*)"
+    ]
+  }
+}
