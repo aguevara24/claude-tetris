@@ -38,6 +38,12 @@ const SLOW_DURATION = 10000;               // ms que dura "Ralentizar"
 const SLOW_FACTOR = 2.5;                   // multiplicador del intervalo de caída mientras dura
 const SKILL_KEYS = ['Digit1', 'Digit2', 'Digit3', 'Digit4', 'Digit5'];
 
+// ---- Menú de pausa ----
+const PAUSE_KEYS = ['Digit1', 'Digit2', 'Digit3', 'Digit4'];
+const START_LEVEL_MIN = 1;
+const START_LEVEL_MAX = 15;
+const START_LEVEL_KEY = 'tetris-start-level';
+
 const GRID_COLORS = { dark: '#22222e', light: '#d8d8e4' };
 const THEME_KEY = 'tetris-theme';
 
@@ -65,9 +71,19 @@ const restartBtn = document.getElementById('restart-btn');
 const themeToggle = document.getElementById('theme-toggle');
 const skillOverlay = document.getElementById('skill-overlay');
 const skillItems = Array.from(document.querySelectorAll('#skill-list .skill-item'));
+const pauseOverlay = document.getElementById('pause-overlay');
+const pauseList = document.getElementById('pause-list');
+const pauseItems = Array.from(document.querySelectorAll('#pause-list .skill-item'));
+const pauseControlsPanel = document.getElementById('pause-controls');
+const pauseLevelPanel = document.getElementById('pause-level');
+const pauseHint = document.getElementById('pause-hint');
+const startLevelEl = document.getElementById('start-level');
+const levelDecBtn = document.getElementById('level-dec');
+const levelIncBtn = document.getElementById('level-inc');
 
 let board, current, nextQueue, score, lines, level, paused, gameOver, lastTime, dropAccum, dropInterval, animId;
 let energy, skillMenuOpen, skillIndex, previewExpanded, holdUnlocked, holdPiece, holdUsed, slowRemaining, undoSnapshot;
+let pauseMenuOpen, pauseIndex, pauseView, startLevel;
 
 // Definidas más abajo, tras las funciones que usan (previewExpanded, canSwap, undo, etc.)
 let SKILLS;
@@ -147,7 +163,7 @@ function clearLines() {
   if (cleared) {
     lines += cleared;
     score += (LINE_SCORES[cleared] || 0) * level;
-    level = Math.floor(lines / 10) + 1;
+    level = Math.floor(lines / 10) + startLevel;
     dropInterval = Math.max(100, 1000 - (level - 1) * 90);
     energy = Math.min(ENERGY_MAX, energy + ENERGY_GAIN[Math.min(cleared, 4)]);
     updateHUD();
@@ -363,16 +379,79 @@ function resume() {
 
 function togglePause() {
   if (gameOver || skillMenuOpen) return;
-  paused = !paused;
-  if (paused) {
-    freeze();
-    overlayTitle.textContent = 'PAUSA';
-    overlayScore.textContent = '';
-    overlay.classList.remove('hidden');
-  } else {
-    overlay.classList.add('hidden');
-    resume();
+  if (pauseMenuOpen) resumeGame();
+  else openPauseMenu();
+}
+
+// ---- Menú de pausa ----
+function openPauseMenu() {
+  if (gameOver || skillMenuOpen || pauseMenuOpen) return;
+  pauseMenuOpen = true;
+  paused = true;
+  pauseIndex = 0;
+  pauseView = 'main';
+  freeze();
+  renderPauseMenu();
+  pauseOverlay.classList.remove('hidden');
+}
+
+function closePauseMenu() {
+  pauseOverlay.classList.add('hidden');
+  pauseMenuOpen = false;
+  pauseView = 'main';
+}
+
+// Cierra el menú de pausa y reanuda la partida en curso (opción "Reanudar" / Esc en la vista principal).
+function resumeGame() {
+  closePauseMenu();
+  paused = false;
+  resume();
+}
+
+function renderPauseMenu() {
+  pauseList.classList.toggle('hidden', pauseView !== 'main');
+  pauseControlsPanel.classList.toggle('hidden', pauseView !== 'controls');
+  pauseLevelPanel.classList.toggle('hidden', pauseView !== 'level');
+  pauseHint.classList.toggle('hidden', pauseView !== 'main');
+  pauseItems.forEach((item, i) => item.classList.toggle('selected', i === pauseIndex));
+  startLevelEl.textContent = startLevel;
+}
+
+function movePauseSelection(delta) {
+  pauseIndex = (pauseIndex + delta + pauseItems.length) % pauseItems.length;
+  renderPauseMenu();
+}
+
+function choosePauseItem(i) {
+  if (!pauseMenuOpen || pauseView !== 'main') return;
+  switch (i) {
+    case 0: // Reanudar
+      resumeGame();
+      break;
+    case 1: // Reiniciar
+      closePauseMenu();
+      init();
+      break;
+    case 2: // Ver controles
+      pauseView = 'controls';
+      renderPauseMenu();
+      break;
+    case 3: // Nivel inicial
+      pauseView = 'level';
+      renderPauseMenu();
+      break;
   }
+}
+
+function adjustStartLevel(delta) {
+  startLevel = Math.min(START_LEVEL_MAX, Math.max(START_LEVEL_MIN, startLevel + delta));
+  localStorage.setItem(START_LEVEL_KEY, startLevel);
+  renderPauseMenu();
+}
+
+function initStartLevel() {
+  const saved = parseInt(localStorage.getItem(START_LEVEL_KEY), 10);
+  startLevel = Number.isInteger(saved) && saved >= START_LEVEL_MIN && saved <= START_LEVEL_MAX ? saved : START_LEVEL_MIN;
 }
 
 function effectiveInterval() {
@@ -444,6 +523,7 @@ function doHold() {
   if (!holdPiece) {
     holdPiece = resetPiece(current);
     spawn();
+    if (gameOver) return; // spawn() puede terminar la partida si la pieza entrante colisiona
   } else {
     const swapped = resetPiece(holdPiece);
     if (collide(swapped.shape, swapped.x, swapped.y)) return;
@@ -534,14 +614,20 @@ skillItems.forEach((item, i) => {
   item.addEventListener('click', () => chooseSkill(i));
 });
 
+pauseItems.forEach((item, i) => {
+  item.addEventListener('click', () => choosePauseItem(i));
+});
+levelDecBtn.addEventListener('click', () => adjustStartLevel(-1));
+levelIncBtn.addEventListener('click', () => adjustStartLevel(1));
+
 function init() {
   board = createBoard();
   score = 0;
   lines = 0;
-  level = 1;
+  level = startLevel;
   paused = false;
   gameOver = false;
-  dropInterval = 1000;
+  dropInterval = Math.max(100, 1000 - (startLevel - 1) * 90);
   dropAccum = 0;
   lastTime = performance.now();
 
@@ -555,12 +641,17 @@ function init() {
   slowRemaining = 0;
   undoSnapshot = null;
 
+  pauseMenuOpen = false;
+  pauseIndex = 0;
+  pauseView = 'main';
+
   nextQueue = Array.from({ length: QUEUE_SIZE }, randomPiece);
   spawn();
   updateHUD();
   refreshPanels();
   overlay.classList.add('hidden');
   skillOverlay.classList.add('hidden');
+  pauseOverlay.classList.add('hidden');
   cancelAnimationFrame(animId);
   animId = requestAnimationFrame(loop);
 }
@@ -576,7 +667,25 @@ document.addEventListener('keydown', e => {
     e.preventDefault();
     return;
   }
-  if (e.code === 'KeyP') { togglePause(); return; }
+  if (pauseMenuOpen) {
+    if (e.code === 'Escape' || e.code === 'KeyP') {
+      if (pauseView === 'main') resumeGame();
+      else { pauseView = 'main'; renderPauseMenu(); }
+    }
+    else if (pauseView === 'level' && e.code === 'ArrowLeft') adjustStartLevel(-1);
+    else if (pauseView === 'level' && e.code === 'ArrowRight') adjustStartLevel(1);
+    else if (pauseView === 'main' && e.code === 'ArrowUp') movePauseSelection(-1);
+    else if (pauseView === 'main' && e.code === 'ArrowDown') movePauseSelection(1);
+    else if (e.code === 'Enter') {
+      if (pauseView === 'main') choosePauseItem(pauseIndex);
+      else { pauseView = 'main'; renderPauseMenu(); }
+    }
+    else if (pauseView === 'main' && PAUSE_KEYS.includes(e.code)) choosePauseItem(PAUSE_KEYS.indexOf(e.code));
+    else return;
+    e.preventDefault();
+    return;
+  }
+  if (e.code === 'KeyP' || e.code === 'Escape') { togglePause(); return; }
   if (paused || gameOver) return;
   switch (e.code) {
     case 'ArrowLeft':
@@ -629,5 +738,6 @@ themeToggle.addEventListener('change', () => {
 
 restartBtn.addEventListener('click', init);
 
+initStartLevel();
 initTheme();
 init();

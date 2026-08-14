@@ -385,3 +385,62 @@ kbd {
   font-size: 11px;
   color: var(--controls-color);
 }
+
+/* ---- Menú de pausa ---- */
+.pause-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.pause-panel ul {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.pause-panel li {
+  font-size: 12px;
+  color: var(--controls-color);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.pause-level-label {
+  text-align: center;
+  font-size: 11px;
+  letter-spacing: 2px;
+  color: var(--label-color);
+  font-weight: 600;
+}
+
+.level-select {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+}
+
+.level-select .value {
+  min-width: 32px;
+  text-align: center;
+}
+
+.level-btn {
+  background: var(--btn-bg);
+  color: var(--btn-color);
+  border: none;
+  border-radius: 6px;
+  width: 28px;
+  height: 28px;
+  font-size: 16px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.level-btn:hover {
+  background: var(--btn-hover);
+}

@@ -63,7 +63,7 @@
             <li><kbd>↑</kbd> rotar</li>
             <li><kbd>↓</kbd> bajar</li>
             <li><kbd>Space</kbd> caída</li>
-            <li><kbd>P</kbd> pausa</li>
+            <li><kbd>P</kbd> / <kbd>Esc</kbd> pausa</li>
             <li><kbd>E</kbd> habilidad</li>
             <li id="hold-control" class="hidden"><kbd>C</kbd> reservar</li>
           </ul>
@@ -125,6 +125,71 @@
           </li>
         </ul>
         <p class="skill-hint"><kbd>Esc</kbd> cancelar</p>
+      </div>
+    </div>
+
+    <div id="pause-overlay" class="overlay hidden">
+      <div class="skill-box">
+        <p class="skill-title">PAUSA</p>
+        <ul class="skill-list" id="pause-list">
+          <li class="skill-item" data-index="0">
+            <span class="skill-key">1</span>
+            <span class="skill-icon">▶</span>
+            <span class="skill-text">
+              <span class="skill-name">Reanudar</span>
+              <span class="skill-desc">Continúa la partida</span>
+            </span>
+          </li>
+          <li class="skill-item" data-index="1">
+            <span class="skill-key">2</span>
+            <span class="skill-icon">↺</span>
+            <span class="skill-text">
+              <span class="skill-name">Reiniciar</span>
+              <span class="skill-desc">Empieza una nueva partida</span>
+            </span>
+          </li>
+          <li class="skill-item" data-index="2">
+            <span class="skill-key">3</span>
+            <span class="skill-icon">⌨</span>
+            <span class="skill-text">
+              <span class="skill-name">Ver controles</span>
+              <span class="skill-desc">Muestra las teclas del juego</span>
+            </span>
+          </li>
+          <li class="skill-item" data-index="3">
+            <span class="skill-key">4</span>
+            <span class="skill-icon">⬆</span>
+            <span class="skill-text">
+              <span class="skill-name">Nivel inicial</span>
+              <span class="skill-desc">Nivel al empezar una partida nueva</span>
+            </span>
+          </li>
+        </ul>
+
+        <div id="pause-controls" class="pause-panel hidden">
+          <ul>
+            <li><kbd>←</kbd><kbd>→</kbd> mover</li>
+            <li><kbd>↑</kbd> / <kbd>X</kbd> rotar</li>
+            <li><kbd>↓</kbd> bajar</li>
+            <li><kbd>Space</kbd> caída</li>
+            <li><kbd>P</kbd> / <kbd>Esc</kbd> pausa</li>
+            <li><kbd>E</kbd> habilidad</li>
+            <li><kbd>C</kbd> reservar</li>
+          </ul>
+          <p class="skill-hint">Pulsa <kbd>Esc</kbd> para volver</p>
+        </div>
+
+        <div id="pause-level" class="pause-panel hidden">
+          <p class="pause-level-label">NIVEL INICIAL</p>
+          <div class="level-select">
+            <button type="button" class="level-btn" id="level-dec" aria-label="Bajar nivel">−</button>
+            <span class="value" id="start-level">1</span>
+            <button type="button" class="level-btn" id="level-inc" aria-label="Subir nivel">+</button>
+          </div>
+          <p class="skill-hint">Ajusta con <kbd>←</kbd> <kbd>→</kbd>, <kbd>Esc</kbd> para volver</p>
+        </div>
+
+        <p class="skill-hint" id="pause-hint"><kbd>Esc</kbd> cerrar</p>
       </div>
     </div>
   </div>
