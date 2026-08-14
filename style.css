@@ -62,6 +62,19 @@ body[data-theme="light"] {
   --skill-selected: #dde3fb;
 }
 
+/* ---- Skins visuales ---- */
+/* Se aplican después de los bloques de tema para que --board-bg/--board-border sigan al skin,
+   no al tema claro/oscuro; ambos atributos conviven en <body> a la vez. */
+body[data-skin="neon"] {
+  --board-bg: #05050a;
+  --board-border: #142033;
+}
+
+body[data-skin="pastel"] {
+  --board-bg: #faf6fb;
+  --board-border: #e0d0ea;
+}
+
 body {
   background: var(--bg);
   color: var(--fg);
@@ -131,6 +144,22 @@ body {
 
 .theme-toggle input:checked + .theme-toggle-track .theme-toggle-thumb {
   transform: translateX(20px);
+}
+
+/* ---- Selector de skin ---- */
+.skin-select {
+  background: var(--kbd-bg);
+  color: var(--fg);
+  border: 1px solid var(--board-border);
+  border-radius: 6px;
+  padding: 4px 8px;
+  font-size: 12px;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.skin-select:focus {
+  outline: 1px solid var(--value-color);
 }
 
 .hidden {
