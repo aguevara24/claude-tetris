@@ -30,6 +30,20 @@ const PIECES = [
 
 const LINE_SCORES = [0, 100, 300, 500, 800];
 
+// ---- Habilidades cargables ----
+const QUEUE_SIZE = 5;                      // piezas siempre precalculadas en la cola (NEXT + previsualización)
+const ENERGY_MAX = 100;
+const ENERGY_GAIN = [0, 10, 25, 45, 70];   // % ganado según nº de líneas limpiadas de golpe (índice = min(cleared, 4))
+const SLOW_DURATION = 10000;               // ms que dura "Ralentizar"
+const SLOW_FACTOR = 2.5;                   // multiplicador del intervalo de caída mientras dura
+const SKILL_KEYS = ['Digit1', 'Digit2', 'Digit3', 'Digit4', 'Digit5'];
+
+// ---- Menú de pausa ----
+const PAUSE_KEYS = ['Digit1', 'Digit2', 'Digit3', 'Digit4'];
+const START_LEVEL_MIN = 1;
+const START_LEVEL_MAX = 15;
+const START_LEVEL_KEY = 'tetris-start-level';
+
 const GRID_COLORS = { dark: '#22222e', light: '#d8d8e4' };
 const THEME_KEY = 'tetris-theme';
 
@@ -37,16 +51,42 @@ const canvas = document.getElementById('board');
 const ctx = canvas.getContext('2d');
 const nextCanvas = document.getElementById('next-canvas');
 const nextCtx = nextCanvas.getContext('2d');
+const queueCanvas = document.getElementById('queue-canvas');
+const queueCtx = queueCanvas.getContext('2d');
+const holdCanvas = document.getElementById('hold-canvas');
+const holdCtx = holdCanvas.getContext('2d');
 const scoreEl = document.getElementById('score');
 const linesEl = document.getElementById('lines');
 const levelEl = document.getElementById('level');
+const energyFill = document.getElementById('energy-fill');
+const energyHint = document.getElementById('energy-hint');
+const slowIndicator = document.getElementById('slow-indicator');
+const queueSection = document.getElementById('queue-section');
+const holdSection = document.getElementById('hold-section');
+const holdControl = document.getElementById('hold-control');
 const overlay = document.getElementById('overlay');
 const overlayTitle = document.getElementById('overlay-title');
 const overlayScore = document.getElementById('overlay-score');
 const restartBtn = document.getElementById('restart-btn');
 const themeToggle = document.getElementById('theme-toggle');
+const skillOverlay = document.getElementById('skill-overlay');
+const skillItems = Array.from(document.querySelectorAll('#skill-list .skill-item'));
+const pauseOverlay = document.getElementById('pause-overlay');
+const pauseList = document.getElementById('pause-list');
+const pauseItems = Array.from(document.querySelectorAll('#pause-list .skill-item'));
+const pauseControlsPanel = document.getElementById('pause-controls');
+const pauseLevelPanel = document.getElementById('pause-level');
+const pauseHint = document.getElementById('pause-hint');
+const startLevelEl = document.getElementById('start-level');
+const levelDecBtn = document.getElementById('level-dec');
+const levelIncBtn = document.getElementById('level-inc');
 
-let board, current, next, score, lines, level, paused, gameOver, lastTime, dropAccum, dropInterval, animId;
+let board, current, nextQueue, score, lines, level, paused, gameOver, lastTime, dropAccum, dropInterval, animId;
+let energy, skillMenuOpen, skillIndex, previewExpanded, holdUnlocked, holdPiece, holdUsed, slowRemaining, undoSnapshot;
+let pauseMenuOpen, pauseIndex, pauseView, startLevel;
+
+// Definidas más abajo, tras las funciones que usan (previewExpanded, canSwap, undo, etc.)
+let SKILLS;
 
 function createBoard() {
   return Array.from({ length: ROWS }, () => new Array(COLS).fill(0));
@@ -56,6 +96,17 @@ function randomPiece() {
   const type = Math.floor(Math.random() * 8) + 1;
   const shape = PIECES[type].map(row => [...row]);
   return { type, shape, x: Math.floor(COLS / 2) - Math.floor(shape[0].length / 2), y: 0 };
+}
+
+function clonePiece(p) {
+  return { type: p.type, shape: p.shape.map(row => [...row]), x: p.x, y: p.y };
+}
+
+// Devuelve una copia del tipo de pieza dado en su forma original y posición de spawn
+// (usado por swap/hold/undo para no arrastrar rotaciones previas).
+function resetPiece(piece) {
+  const shape = PIECES[piece.type].map(row => [...row]);
+  return { type: piece.type, shape, x: Math.floor(COLS / 2) - Math.floor(shape[0].length / 2), y: 0 };
 }
 
 function collide(shape, ox, oy) {
@@ -112,8 +163,9 @@ function clearLines() {
   if (cleared) {
     lines += cleared;
     score += (LINE_SCORES[cleared] || 0) * level;
-    level = Math.floor(lines / 10) + 1;
+    level = Math.floor(lines / 10) + startLevel;
     dropInterval = Math.max(100, 1000 - (level - 1) * 90);
+    energy = Math.min(ENERGY_MAX, energy + ENERGY_GAIN[Math.min(cleared, 4)]);
     updateHUD();
   }
 }
@@ -141,25 +193,54 @@ function softDrop() {
   }
 }
 
+// Guarda el estado justo antes de fijar una pieza, para poder deshacerlo con la habilidad "Deshacer".
+function snapshot() {
+  undoSnapshot = {
+    board: board.map(row => [...row]),
+    piece: clonePiece(current),
+    queue: nextQueue.map(clonePiece),
+    hold: holdPiece ? clonePiece(holdPiece) : null,
+    holdUsed,
+    score, lines, level, dropInterval,
+  };
+}
+
 function lockPiece() {
+  snapshot();
   merge();
   clearLines();
   spawn();
+  holdUsed = false; // pieza nueva: se puede volver a usar Hold
 }
 
 function spawn() {
-  current = next;
-  next = randomPiece();
+  current = nextQueue.shift();
+  nextQueue.push(randomPiece());
   if (collide(current.shape, current.x, current.y)) {
     endGame();
+    return;
   }
   drawNext();
+  drawQueue();
 }
 
 function updateHUD() {
   scoreEl.textContent = score.toLocaleString();
   linesEl.textContent = lines;
   levelEl.textContent = level;
+  energyFill.style.width = energy + '%';
+  energyFill.classList.toggle('full', energy >= ENERGY_MAX);
+  energyHint.textContent = energy >= ENERGY_MAX ? 'Pulsa E' : 'Limpia líneas';
+  updateSlowIndicator();
+}
+
+function updateSlowIndicator() {
+  if (slowRemaining > 0) {
+    slowIndicator.textContent = `SLOW ${(slowRemaining / 1000).toFixed(1)}s`;
+    slowIndicator.classList.remove('hidden');
+  } else {
+    slowIndicator.classList.add('hidden');
+  }
 }
 
 function drawBlock(context, x, y, colorIndex, size, alpha) {
@@ -172,6 +253,34 @@ function drawBlock(context, x, y, colorIndex, size, alpha) {
   context.fillStyle = 'rgba(255,255,255,0.12)';
   context.fillRect(x * size + 1, y * size + 1, size - 2, 4);
   context.globalAlpha = 1;
+}
+
+// Bounding box de las celdas ocupadas de una forma (para centrar piezas de distinto tamaño en los paneles).
+function pieceBounds(shape) {
+  let minR = shape.length, maxR = -1, minC = shape[0].length, maxC = -1;
+  for (let r = 0; r < shape.length; r++) {
+    for (let c = 0; c < shape[r].length; c++) {
+      if (shape[r][c]) {
+        if (r < minR) minR = r;
+        if (r > maxR) maxR = r;
+        if (c < minC) minC = c;
+        if (c > maxC) maxC = c;
+      }
+    }
+  }
+  return { minR, minC, height: maxR - minR + 1, width: maxC - minC + 1 };
+}
+
+function drawPiecePreview(context, piece, size, gridSpan, alpha) {
+  if (!piece) return;
+  const shape = piece.shape;
+  const b = pieceBounds(shape);
+  const offX = Math.floor((gridSpan - b.width) / 2) - b.minC;
+  const offY = Math.floor((gridSpan - b.height) / 2) - b.minR;
+  for (let r = 0; r < shape.length; r++)
+    for (let c = 0; c < shape[r].length; c++)
+      if (shape[r][c])
+        drawBlock(context, offX + c, offY + r, shape[r][c], size, alpha);
 }
 
 function drawGrid() {
@@ -214,14 +323,39 @@ function draw() {
 }
 
 function drawNext() {
-  const NB = 30;
   nextCtx.clearRect(0, 0, nextCanvas.width, nextCanvas.height);
-  const shape = next.shape;
-  const offX = Math.floor((4 - shape[0].length) / 2);
-  const offY = Math.floor((4 - shape.length) / 2);
-  for (let r = 0; r < shape.length; r++)
-    for (let c = 0; c < shape[r].length; c++)
-      drawBlock(nextCtx, offX + c, offY + r, shape[r][c], NB);
+  drawPiecePreview(nextCtx, nextQueue[0], 30, 4);
+}
+
+// Panel "COLA": muestra las 4 piezas siguientes a la de NEXT (habilidad "Ver 5 siguientes").
+function drawQueue() {
+  queueCtx.clearRect(0, 0, queueCanvas.width, queueCanvas.height);
+  if (!previewExpanded) return;
+  const size = 14;
+  const gridPx = size * 4;
+  const rowHeight = queueCanvas.height / (QUEUE_SIZE - 1);
+  const offsetX = (queueCanvas.width - gridPx) / 2;
+  for (let i = 1; i < QUEUE_SIZE; i++) {
+    const rowTop = (i - 1) * rowHeight + (rowHeight - gridPx) / 2;
+    queueCtx.save();
+    queueCtx.translate(offsetX, rowTop);
+    drawPiecePreview(queueCtx, nextQueue[i], size, 4);
+    queueCtx.restore();
+  }
+}
+
+// Panel "RESERVA": pieza guardada con la habilidad Hold.
+function drawHold() {
+  holdCtx.clearRect(0, 0, holdCanvas.width, holdCanvas.height);
+  drawPiecePreview(holdCtx, holdPiece, 30, 4, holdUsed ? 0.35 : 1);
+}
+
+function refreshPanels() {
+  queueSection.classList.toggle('hidden', !previewExpanded);
+  holdSection.classList.toggle('hidden', !holdUnlocked);
+  holdControl.classList.toggle('hidden', !holdUnlocked);
+  drawQueue();
+  drawHold();
 }
 
 function endGame() {
@@ -232,25 +366,107 @@ function endGame() {
   overlay.classList.remove('hidden');
 }
 
+// Congela/reanuda el loop de juego; compartido por la pausa y el menú de habilidades.
+function freeze() {
+  cancelAnimationFrame(animId);
+}
+
+function resume() {
+  cancelAnimationFrame(animId);
+  lastTime = performance.now();
+  animId = requestAnimationFrame(loop);
+}
+
 function togglePause() {
-  if (gameOver) return;
-  paused = !paused;
-  if (!paused) {
-    lastTime = performance.now();
-    loop(lastTime);
-  } else {
-    cancelAnimationFrame(animId);
-    overlayTitle.textContent = 'PAUSA';
-    overlayScore.textContent = '';
-    overlay.classList.remove('hidden');
+  if (gameOver || skillMenuOpen) return;
+  if (pauseMenuOpen) resumeGame();
+  else openPauseMenu();
+}
+
+// ---- Menú de pausa ----
+function openPauseMenu() {
+  if (gameOver || skillMenuOpen || pauseMenuOpen) return;
+  pauseMenuOpen = true;
+  paused = true;
+  pauseIndex = 0;
+  pauseView = 'main';
+  freeze();
+  renderPauseMenu();
+  pauseOverlay.classList.remove('hidden');
+}
+
+function closePauseMenu() {
+  pauseOverlay.classList.add('hidden');
+  pauseMenuOpen = false;
+  pauseView = 'main';
+}
+
+// Cierra el menú de pausa y reanuda la partida en curso (opción "Reanudar" / Esc en la vista principal).
+function resumeGame() {
+  closePauseMenu();
+  paused = false;
+  resume();
+}
+
+function renderPauseMenu() {
+  pauseList.classList.toggle('hidden', pauseView !== 'main');
+  pauseControlsPanel.classList.toggle('hidden', pauseView !== 'controls');
+  pauseLevelPanel.classList.toggle('hidden', pauseView !== 'level');
+  pauseHint.classList.toggle('hidden', pauseView !== 'main');
+  pauseItems.forEach((item, i) => item.classList.toggle('selected', i === pauseIndex));
+  startLevelEl.textContent = startLevel;
+}
+
+function movePauseSelection(delta) {
+  pauseIndex = (pauseIndex + delta + pauseItems.length) % pauseItems.length;
+  renderPauseMenu();
+}
+
+function choosePauseItem(i) {
+  if (!pauseMenuOpen || pauseView !== 'main') return;
+  switch (i) {
+    case 0: // Reanudar
+      resumeGame();
+      break;
+    case 1: // Reiniciar
+      closePauseMenu();
+      init();
+      break;
+    case 2: // Ver controles
+      pauseView = 'controls';
+      renderPauseMenu();
+      break;
+    case 3: // Nivel inicial
+      pauseView = 'level';
+      renderPauseMenu();
+      break;
   }
+}
+
+function adjustStartLevel(delta) {
+  startLevel = Math.min(START_LEVEL_MAX, Math.max(START_LEVEL_MIN, startLevel + delta));
+  localStorage.setItem(START_LEVEL_KEY, startLevel);
+  renderPauseMenu();
+}
+
+function initStartLevel() {
+  const saved = parseInt(localStorage.getItem(START_LEVEL_KEY), 10);
+  startLevel = Number.isInteger(saved) && saved >= START_LEVEL_MIN && saved <= START_LEVEL_MAX ? saved : START_LEVEL_MIN;
+}
+
+function effectiveInterval() {
+  return slowRemaining > 0 ? dropInterval * SLOW_FACTOR : dropInterval;
 }
 
 function loop(ts) {
   const dt = ts - lastTime;
   lastTime = ts;
+  if (slowRemaining > 0) {
+    slowRemaining = Math.max(0, slowRemaining - dt);
+    updateSlowIndicator();
+  }
   dropAccum += dt;
-  if (dropAccum >= dropInterval) {
+  if (dropAccum >= effectiveInterval()) {
     dropAccum = 0;
     if (!collide(current.shape, current.x, current.y + 1)) {
       current.y++;
@@ -262,26 +478,214 @@ function loop(ts) {
   animId = requestAnimationFrame(loop);
 }
 
+// ---- Habilidad: Intercambiar pieza actual por la del pool (NEXT) ----
+function canSwap() {
+  const incoming = resetPiece(nextQueue[0]);
+  return !collide(incoming.shape, incoming.x, incoming.y);
+}
+
+function swapWithQueue() {
+  const incoming = resetPiece(nextQueue[0]);
+  if (collide(incoming.shape, incoming.x, incoming.y)) return false;
+  nextQueue[0] = resetPiece(current);
+  current = incoming;
+  drawNext();
+  return true;
+}
+
+// ---- Habilidad: Deshacer la última colocación ----
+function undo() {
+  if (!undoSnapshot) return false;
+  const s = undoSnapshot;
+  board = s.board.map(row => [...row]);
+  nextQueue = s.queue.map(clonePiece);
+  holdPiece = s.hold ? clonePiece(s.hold) : null;
+  holdUsed = s.holdUsed;
+  score = s.score;
+  lines = s.lines;
+  level = s.level;
+  dropInterval = s.dropInterval;
+  dropAccum = 0;
+
+  const restored = resetPiece(s.piece);
+  current = collide(restored.shape, restored.x, restored.y) ? clonePiece(s.piece) : restored;
+
+  undoSnapshot = null;
+  updateHUD();
+  refreshPanels();
+  drawNext();
+  return true;
+}
+
+// ---- Habilidad: Reservar (Hold), tecla C ----
+function doHold() {
+  if (!holdUnlocked || holdUsed || paused || gameOver || skillMenuOpen) return;
+  if (!holdPiece) {
+    holdPiece = resetPiece(current);
+    spawn();
+    if (gameOver) return; // spawn() puede terminar la partida si la pieza entrante colisiona
+  } else {
+    const swapped = resetPiece(holdPiece);
+    if (collide(swapped.shape, swapped.x, swapped.y)) return;
+    holdPiece = resetPiece(current);
+    current = swapped;
+  }
+  holdUsed = true;
+  refreshPanels();
+  updateHUD();
+}
+
+SKILLS = [
+  {
+    id: 'preview',
+    name: 'Ver 5 siguientes',
+    available: () => !previewExpanded,
+    apply: () => { previewExpanded = true; refreshPanels(); return true; },
+  },
+  {
+    id: 'swap',
+    name: 'Intercambiar pieza',
+    available: () => canSwap(),
+    apply: swapWithQueue,
+  },
+  {
+    id: 'slow',
+    name: 'Ralentizar 10s',
+    available: () => true,
+    apply: () => { slowRemaining = SLOW_DURATION; updateSlowIndicator(); return true; },
+  },
+  {
+    id: 'undo',
+    name: 'Deshacer colocación',
+    available: () => undoSnapshot !== null,
+    apply: undo,
+  },
+  {
+    id: 'hold',
+    name: 'Reservar (Hold)',
+    available: () => !holdUnlocked,
+    apply: () => { holdUnlocked = true; refreshPanels(); return true; },
+  },
+];
+
+function openSkillMenu() {
+  if (energy < ENERGY_MAX || paused || gameOver || skillMenuOpen) return;
+  skillMenuOpen = true;
+  skillIndex = 0;
+  freeze();
+  renderSkillMenu();
+  skillOverlay.classList.remove('hidden');
+}
+
+function closeSkillMenu(spent) {
+  skillOverlay.classList.add('hidden');
+  skillMenuOpen = false;
+  if (spent) energy = 0;
+  updateHUD();
+  resume();
+}
+
+function renderSkillMenu() {
+  skillItems.forEach((item, i) => {
+    const skill = SKILLS[i];
+    item.classList.toggle('disabled', !skill.available());
+    item.classList.toggle('selected', i === skillIndex);
+  });
+}
+
+function moveSkillSelection(delta) {
+  skillIndex = (skillIndex + delta + SKILLS.length) % SKILLS.length;
+  renderSkillMenu();
+}
+
+function chooseSkill(i) {
+  if (!skillMenuOpen) return;
+  const skill = SKILLS[i];
+  if (!skill || !skill.available()) return;
+  const result = skill.apply();
+  if (result === false) {
+    renderSkillMenu();
+    return;
+  }
+  closeSkillMenu(true);
+}
+
+skillItems.forEach((item, i) => {
+  item.addEventListener('click', () => chooseSkill(i));
+});
+
+pauseItems.forEach((item, i) => {
+  item.addEventListener('click', () => choosePauseItem(i));
+});
+levelDecBtn.addEventListener('click', () => adjustStartLevel(-1));
+levelIncBtn.addEventListener('click', () => adjustStartLevel(1));
+
 function init() {
   board = createBoard();
   score = 0;
   lines = 0;
-  level = 1;
+  level = startLevel;
   paused = false;
   gameOver = false;
-  dropInterval = 1000;
+  dropInterval = Math.max(100, 1000 - (startLevel - 1) * 90);
   dropAccum = 0;
   lastTime = performance.now();
-  next = randomPiece();
+
+  energy = 0;
+  skillMenuOpen = false;
+  skillIndex = 0;
+  previewExpanded = false;
+  holdUnlocked = false;
+  holdPiece = null;
+  holdUsed = false;
+  slowRemaining = 0;
+  undoSnapshot = null;
+
+  pauseMenuOpen = false;
+  pauseIndex = 0;
+  pauseView = 'main';
+
+  nextQueue = Array.from({ length: QUEUE_SIZE }, randomPiece);
   spawn();
   updateHUD();
+  refreshPanels();
   overlay.classList.add('hidden');
+  skillOverlay.classList.add('hidden');
+  pauseOverlay.classList.add('hidden');
   cancelAnimationFrame(animId);
   animId = requestAnimationFrame(loop);
 }
 
 document.addEventListener('keydown', e => {
-  if (e.code === 'KeyP') { togglePause(); return; }
+  if (skillMenuOpen) {
+    if (e.code === 'Escape') closeSkillMenu(false);
+    else if (e.code === 'ArrowUp') moveSkillSelection(-1);
+    else if (e.code === 'ArrowDown') moveSkillSelection(1);
+    else if (e.code === 'Enter') chooseSkill(skillIndex);
+    else if (SKILL_KEYS.includes(e.code)) chooseSkill(SKILL_KEYS.indexOf(e.code));
+    else return;
+    e.preventDefault();
+    return;
+  }
+  if (pauseMenuOpen) {
+    if (e.code === 'Escape' || e.code === 'KeyP') {
+      if (pauseView === 'main') resumeGame();
+      else { pauseView = 'main'; renderPauseMenu(); }
+    }
+    else if (pauseView === 'level' && e.code === 'ArrowLeft') adjustStartLevel(-1);
+    else if (pauseView === 'level' && e.code === 'ArrowRight') adjustStartLevel(1);
+    else if (pauseView === 'main' && e.code === 'ArrowUp') movePauseSelection(-1);
+    else if (pauseView === 'main' && e.code === 'ArrowDown') movePauseSelection(1);
+    else if (e.code === 'Enter') {
+      if (pauseView === 'main') choosePauseItem(pauseIndex);
+      else { pauseView = 'main'; renderPauseMenu(); }
+    }
+    else if (pauseView === 'main' && PAUSE_KEYS.includes(e.code)) choosePauseItem(PAUSE_KEYS.indexOf(e.code));
+    else return;
+    e.preventDefault();
+    return;
+  }
+  if (e.code === 'KeyP' || e.code === 'Escape') { togglePause(); return; }
   if (paused || gameOver) return;
   switch (e.code) {
     case 'ArrowLeft':
@@ -301,6 +705,12 @@ document.addEventListener('keydown', e => {
       e.preventDefault();
       hardDrop();
       break;
+    case 'KeyE':
+      openSkillMenu();
+      break;
+    case 'KeyC':
+      doHold();
+      break;
   }
   updateHUD();
 });
@@ -310,7 +720,11 @@ function applyTheme(theme) {
   themeToggle.checked = theme === 'light';
   localStorage.setItem(THEME_KEY, theme);
   if (current) draw();
-  if (next) drawNext();
+  if (nextQueue) {
+    drawNext();
+    drawQueue();
+    drawHold();
+  }
 }
 
 function initTheme() {
@@ -324,5 +738,6 @@ themeToggle.addEventListener('change', () => {
 
 restartBtn.addEventListener('click', init);
 
+initStartLevel();
 initTheme();
 init();
