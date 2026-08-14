@@ -75,7 +75,12 @@
       <div class="overlay-box">
         <p id="overlay-title">GAME OVER</p>
         <p id="overlay-score"></p>
-        <button id="restart-btn">Reiniciar</button>
+        <div id="name-entry" class="name-entry hidden">
+          <input id="score-name" type="text" maxlength="20" placeholder="Tu nombre" autocomplete="off" />
+          <button id="save-score-btn" class="btn">Guardar</button>
+        </div>
+        <div id="gameover-table" class="score-table-container hidden"></div>
+        <button id="restart-btn" class="btn">Reiniciar</button>
       </div>
     </div>
 
@@ -125,6 +130,22 @@
           </li>
         </ul>
         <p class="skill-hint"><kbd>Esc</kbd> cancelar</p>
+      </div>
+    </div>
+
+    <div id="start-overlay" class="overlay">
+      <div class="overlay-box start-box">
+        <p class="game-title-small">TETRIS</p>
+        <div class="start-stats">
+          <span>Mejor combo: <span id="start-best-combo">0</span></span>
+          <span>Líneas máximas: <span id="start-max-lines">0</span></span>
+        </div>
+        <div id="start-table" class="score-table-container"></div>
+        <div class="start-actions">
+          <button id="play-btn" class="btn">Jugar</button>
+          <button id="reset-scores-btn" class="btn btn-secondary">Resetear records</button>
+        </div>
+        <p class="skill-hint">Pulsa <kbd>Enter</kbd> o <kbd>Space</kbd> para jugar</p>
       </div>
     </div>
   </div>

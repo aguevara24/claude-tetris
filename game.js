@@ -41,6 +41,11 @@ const SKILL_KEYS = ['Digit1', 'Digit2', 'Digit3', 'Digit4', 'Digit5'];
 const GRID_COLORS = { dark: '#22222e', light: '#d8d8e4' };
 const THEME_KEY = 'tetris-theme';
 
+// ---- Tabla de records local ----
+const SCORES_KEY = 'tetris-scores';
+const LAST_NAME_KEY = 'tetris-last-name';
+const MAX_SCORES = 5;
+
 const canvas = document.getElementById('board');
 const ctx = canvas.getContext('2d');
 const nextCanvas = document.getElementById('next-canvas');
@@ -65,9 +70,20 @@ const restartBtn = document.getElementById('restart-btn');
 const themeToggle = document.getElementById('theme-toggle');
 const skillOverlay = document.getElementById('skill-overlay');
 const skillItems = Array.from(document.querySelectorAll('#skill-list .skill-item'));
+const startOverlay = document.getElementById('start-overlay');
+const startTable = document.getElementById('start-table');
+const startBestCombo = document.getElementById('start-best-combo');
+const startMaxLines = document.getElementById('start-max-lines');
+const playBtn = document.getElementById('play-btn');
+const resetScoresBtn = document.getElementById('reset-scores-btn');
+const nameEntry = document.getElementById('name-entry');
+const scoreNameInput = document.getElementById('score-name');
+const saveScoreBtn = document.getElementById('save-score-btn');
+const gameoverTable = document.getElementById('gameover-table');
 
 let board, current, nextQueue, score, lines, level, paused, gameOver, lastTime, dropAccum, dropInterval, animId;
 let energy, skillMenuOpen, skillIndex, previewExpanded, holdUnlocked, holdPiece, holdUsed, slowRemaining, undoSnapshot;
+let combo, bestCombo;
 
 // Definidas más abajo, tras las funciones que usan (previewExpanded, canSwap, undo, etc.)
 let SKILLS;
@@ -150,7 +166,11 @@ function clearLines() {
     level = Math.floor(lines / 10) + 1;
     dropInterval = Math.max(100, 1000 - (level - 1) * 90);
     energy = Math.min(ENERGY_MAX, energy + ENERGY_GAIN[Math.min(cleared, 4)]);
+    combo++;
+    bestCombo = Math.max(bestCombo, combo);
     updateHUD();
+  } else {
+    combo = 0;
   }
 }
 
@@ -185,7 +205,7 @@ function snapshot() {
     queue: nextQueue.map(clonePiece),
     hold: holdPiece ? clonePiece(holdPiece) : null,
     holdUsed,
-    score, lines, level, dropInterval,
+    score, lines, level, dropInterval, combo,
   };
 }
 
@@ -342,12 +362,133 @@ function refreshPanels() {
   drawHold();
 }
 
+// ---- Tabla de records local ----
+function defaultScores() {
+  return { top: [], bestCombo: 0, maxLines: 0 };
+}
+
+function loadScores() {
+  try {
+    const raw = localStorage.getItem(SCORES_KEY);
+    if (!raw) return defaultScores();
+    const parsed = JSON.parse(raw);
+    return {
+      top: Array.isArray(parsed.top) ? parsed.top : [],
+      bestCombo: Number(parsed.bestCombo) || 0,
+      maxLines: Number(parsed.maxLines) || 0,
+    };
+  } catch {
+    return defaultScores();
+  }
+}
+
+function saveScores(data) {
+  try {
+    localStorage.setItem(SCORES_KEY, JSON.stringify(data));
+  } catch {
+    // localStorage no disponible (cuota excedida, navegación privada, etc.) - no debe romper el juego.
+  }
+}
+
+function qualifies(points) {
+  const data = loadScores();
+  return data.top.length < MAX_SCORES || points > data.top[data.top.length - 1].score;
+}
+
+// Registra las estadísticas de la partida que acaba de terminar (combo/líneas máximas),
+// sin necesidad de que la puntuación entre en el top 5.
+function recordRunStats() {
+  const data = loadScores();
+  data.bestCombo = Math.max(data.bestCombo, bestCombo);
+  data.maxLines = Math.max(data.maxLines, lines);
+  saveScores(data);
+  return data;
+}
+
+function addScore(name, points, linesCleared, lvl) {
+  const data = loadScores();
+  const entry = { name, score: points, lines: linesCleared, level: lvl, date: new Date().toISOString() };
+  data.top.push(entry);
+  data.top.sort((a, b) => b.score - a.score);
+  data.top = data.top.slice(0, MAX_SCORES);
+  data.bestCombo = Math.max(data.bestCombo, bestCombo);
+  data.maxLines = Math.max(data.maxLines, linesCleared);
+  saveScores(data);
+  return { data, index: data.top.indexOf(entry) };
+}
+
+function resetScores() {
+  if (!confirm('¿Seguro que quieres borrar todos los records?')) return;
+  saveScores(defaultScores());
+  renderStartScreen();
+}
+
+function escapeHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+// Construye la tabla de records dentro de `container`; compartida por la pantalla
+// de inicio y la de game over. `highlightIndex` resalta la fila recién guardada.
+function renderScoreTable(container, highlightIndex = -1) {
+  const data = loadScores();
+  if (!data.top.length) {
+    container.innerHTML = '<p class="score-empty">Sin puntuaciones todavía</p>';
+    return;
+  }
+  const rows = data.top.map((entry, i) => `
+    <tr class="${i === highlightIndex ? 'highlight' : ''}">
+      <td>${i + 1}</td>
+      <td>${escapeHtml(entry.name)}</td>
+      <td>${entry.score.toLocaleString()}</td>
+      <td>${entry.lines}</td>
+      <td>${entry.level}</td>
+    </tr>`).join('');
+  container.innerHTML = `
+    <table class="score-table">
+      <thead>
+        <tr><th>#</th><th>Nombre</th><th>Puntos</th><th>Líneas</th><th>Nivel</th></tr>
+      </thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+}
+
+function renderStartScreen() {
+  const data = loadScores();
+  startBestCombo.textContent = data.bestCombo;
+  startMaxLines.textContent = data.maxLines;
+  renderScoreTable(startTable);
+}
+
+function saveCurrentScore() {
+  const name = scoreNameInput.value.trim().slice(0, 20) || 'Jugador';
+  localStorage.setItem(LAST_NAME_KEY, name);
+  const { index } = addScore(name, score, lines, level);
+  nameEntry.classList.add('hidden');
+  gameoverTable.classList.remove('hidden');
+  renderScoreTable(gameoverTable, index);
+}
+
 function endGame() {
   gameOver = true;
   cancelAnimationFrame(animId);
   overlayTitle.textContent = 'GAME OVER';
   overlayScore.textContent = `Puntuación: ${score.toLocaleString()}`;
+  recordRunStats();
+
+  if (qualifies(score)) {
+    nameEntry.classList.remove('hidden');
+    gameoverTable.classList.add('hidden');
+    scoreNameInput.value = localStorage.getItem(LAST_NAME_KEY) || '';
+  } else {
+    nameEntry.classList.add('hidden');
+    gameoverTable.classList.remove('hidden');
+    renderScoreTable(gameoverTable);
+  }
+
   overlay.classList.remove('hidden');
+  if (!nameEntry.classList.contains('hidden')) scoreNameInput.focus();
 }
 
 // Congela/reanuda el loop de juego; compartido por la pausa y el menú de habilidades.
@@ -368,6 +509,8 @@ function togglePause() {
     freeze();
     overlayTitle.textContent = 'PAUSA';
     overlayScore.textContent = '';
+    nameEntry.classList.add('hidden');
+    gameoverTable.classList.add('hidden');
     overlay.classList.remove('hidden');
   } else {
     overlay.classList.add('hidden');
@@ -426,6 +569,7 @@ function undo() {
   lines = s.lines;
   level = s.level;
   dropInterval = s.dropInterval;
+  combo = s.combo;
   dropAccum = 0;
 
   const restored = resetPiece(s.piece);
@@ -534,11 +678,15 @@ skillItems.forEach((item, i) => {
   item.addEventListener('click', () => chooseSkill(i));
 });
 
+// Reinicia todo el estado de la partida, pero NO arranca el loop de juego
+// (eso lo hace startGame(), tras pulsar Jugar en la pantalla de inicio).
 function init() {
   board = createBoard();
   score = 0;
   lines = 0;
   level = 1;
+  combo = 0;
+  bestCombo = 0;
   paused = false;
   gameOver = false;
   dropInterval = 1000;
@@ -561,11 +709,37 @@ function init() {
   refreshPanels();
   overlay.classList.add('hidden');
   skillOverlay.classList.add('hidden');
+  nameEntry.classList.add('hidden');
+  gameoverTable.classList.add('hidden');
   cancelAnimationFrame(animId);
+  draw();
+}
+
+// Oculta la pantalla de inicio/overlays y arranca el loop de juego.
+function startGame() {
+  startOverlay.classList.add('hidden');
+  overlay.classList.add('hidden');
+  skillOverlay.classList.add('hidden');
+  cancelAnimationFrame(animId);
+  lastTime = performance.now();
+  dropAccum = 0;
   animId = requestAnimationFrame(loop);
 }
 
+function newGame() {
+  init();
+  startGame();
+}
+
 document.addEventListener('keydown', e => {
+  if (e.target && e.target.tagName === 'INPUT' && e.target.type !== 'checkbox') return;
+  if (!startOverlay.classList.contains('hidden')) {
+    if (e.code === 'Enter' || e.code === 'Space') {
+      e.preventDefault();
+      newGame();
+    }
+    return;
+  }
   if (skillMenuOpen) {
     if (e.code === 'Escape') closeSkillMenu(false);
     else if (e.code === 'ArrowUp') moveSkillSelection(-1);
@@ -627,7 +801,17 @@ themeToggle.addEventListener('change', () => {
   applyTheme(themeToggle.checked ? 'light' : 'dark');
 });
 
-restartBtn.addEventListener('click', init);
+restartBtn.addEventListener('click', newGame);
+playBtn.addEventListener('click', newGame);
+resetScoresBtn.addEventListener('click', resetScores);
+saveScoreBtn.addEventListener('click', saveCurrentScore);
+scoreNameInput.addEventListener('keydown', e => {
+  if (e.code === 'Enter') {
+    e.preventDefault();
+    saveCurrentScore();
+  }
+});
 
 initTheme();
 init();
+renderStartScreen();
