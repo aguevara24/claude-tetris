@@ -35,8 +35,25 @@
         </div>
 
         <div class="panel-section">
+          <span class="label">ENERGÍA</span>
+          <div class="energy-bar"><div class="energy-fill" id="energy-fill"></div></div>
+          <span class="energy-hint" id="energy-hint">Limpia líneas</span>
+          <span class="slow-indicator hidden" id="slow-indicator"></span>
+        </div>
+
+        <div class="panel-section">
           <span class="label">NEXT</span>
           <canvas id="next-canvas" width="120" height="120"></canvas>
+        </div>
+
+        <div class="panel-section hidden" id="queue-section">
+          <span class="label">COLA</span>
+          <canvas id="queue-canvas" width="120" height="224"></canvas>
+        </div>
+
+        <div class="panel-section hidden" id="hold-section">
+          <span class="label">RESERVA</span>
+          <canvas id="hold-canvas" width="120" height="120"></canvas>
         </div>
 
         <div class="panel-section controls">
@@ -47,6 +64,8 @@
             <li><kbd>↓</kbd> bajar</li>
             <li><kbd>Space</kbd> caída</li>
             <li><kbd>P</kbd> pausa</li>
+            <li><kbd>E</kbd> habilidad</li>
+            <li id="hold-control" class="hidden"><kbd>C</kbd> reservar</li>
           </ul>
         </div>
       </aside>
@@ -56,7 +75,77 @@
       <div class="overlay-box">
         <p id="overlay-title">GAME OVER</p>
         <p id="overlay-score"></p>
-        <button id="restart-btn">Reiniciar</button>
+        <div id="name-entry" class="name-entry hidden">
+          <input id="score-name" type="text" maxlength="20" placeholder="Tu nombre" autocomplete="off" />
+          <button id="save-score-btn" class="btn">Guardar</button>
+        </div>
+        <div id="gameover-table" class="score-table-container hidden"></div>
+        <button id="restart-btn" class="btn">Reiniciar</button>
+      </div>
+    </div>
+
+    <div id="skill-overlay" class="overlay hidden">
+      <div class="skill-box">
+        <p class="skill-title">ELIGE UNA HABILIDAD</p>
+        <ul class="skill-list" id="skill-list">
+          <li class="skill-item" data-index="0">
+            <span class="skill-key">1</span>
+            <span class="skill-icon">👁</span>
+            <span class="skill-text">
+              <span class="skill-name">Ver 5 siguientes</span>
+              <span class="skill-desc">Permanente</span>
+            </span>
+          </li>
+          <li class="skill-item" data-index="1">
+            <span class="skill-key">2</span>
+            <span class="skill-icon">🔄</span>
+            <span class="skill-text">
+              <span class="skill-name">Intercambiar pieza</span>
+              <span class="skill-desc">Cambia la actual por la siguiente</span>
+            </span>
+          </li>
+          <li class="skill-item" data-index="2">
+            <span class="skill-key">3</span>
+            <span class="skill-icon">⏳</span>
+            <span class="skill-text">
+              <span class="skill-name">Ralentizar 10s</span>
+              <span class="skill-desc">Caída 2.5× más lenta</span>
+            </span>
+          </li>
+          <li class="skill-item" data-index="3">
+            <span class="skill-key">4</span>
+            <span class="skill-icon">↩</span>
+            <span class="skill-text">
+              <span class="skill-name">Deshacer colocación</span>
+              <span class="skill-desc">Revierte la última pieza</span>
+            </span>
+          </li>
+          <li class="skill-item" data-index="4">
+            <span class="skill-key">5</span>
+            <span class="skill-icon">📦</span>
+            <span class="skill-text">
+              <span class="skill-name">Reservar (Hold)</span>
+              <span class="skill-desc">Desbloquea el slot con tecla C</span>
+            </span>
+          </li>
+        </ul>
+        <p class="skill-hint"><kbd>Esc</kbd> cancelar</p>
+      </div>
+    </div>
+
+    <div id="start-overlay" class="overlay">
+      <div class="overlay-box start-box">
+        <p class="game-title-small">TETRIS</p>
+        <div class="start-stats">
+          <span>Mejor combo: <span id="start-best-combo">0</span></span>
+          <span>Líneas máximas: <span id="start-max-lines">0</span></span>
+        </div>
+        <div id="start-table" class="score-table-container"></div>
+        <div class="start-actions">
+          <button id="play-btn" class="btn">Jugar</button>
+          <button id="reset-scores-btn" class="btn btn-secondary">Resetear records</button>
+        </div>
+        <p class="skill-hint">Pulsa <kbd>Enter</kbd> o <kbd>Space</kbd> para jugar</p>
       </div>
     </div>
   </div>
