@@ -24,6 +24,13 @@
   --btn-bg: #7aa2f7;
   --btn-color: #0f0f17;
   --btn-hover: #9bbdff;
+  --energy-bg: #1a1a25;
+  --energy-fill: #7aa2f7;
+  --energy-full: #ffd54f;
+  --energy-glow: rgba(255, 213, 79, 0.6);
+  --skill-bg: #1a1a25;
+  --skill-border: #2a2a3a;
+  --skill-selected: #2a2a4a;
 }
 
 body[data-theme="light"] {
@@ -46,6 +53,13 @@ body[data-theme="light"] {
   --btn-bg: #3b5bdb;
   --btn-color: #ffffff;
   --btn-hover: #5c7ce0;
+  --energy-bg: #e4e4ee;
+  --energy-fill: #3b5bdb;
+  --energy-full: #f5a623;
+  --energy-glow: rgba(245, 166, 35, 0.5);
+  --skill-bg: #ffffff;
+  --skill-border: #c8c8d8;
+  --skill-selected: #dde3fb;
 }
 
 body {
@@ -119,6 +133,10 @@ body {
   transform: translateX(20px);
 }
 
+.hidden {
+  display: none !important;
+}
+
 .game-container {
   display: flex;
   gap: 20px;
@@ -163,11 +181,50 @@ body {
   letter-spacing: 1px;
 }
 
-#next-canvas {
+#next-canvas,
+#queue-canvas,
+#hold-canvas {
   display: block;
   border: 1px solid var(--board-border);
   background: var(--board-bg);
   border-radius: 4px;
+}
+
+/* ---- Barra de energía ---- */
+.energy-bar {
+  height: 14px;
+  border-radius: 7px;
+  background: var(--energy-bg);
+  border: 1px solid var(--board-border);
+  overflow: hidden;
+}
+
+.energy-fill {
+  height: 100%;
+  width: 0%;
+  background: var(--energy-fill);
+  transition: width 0.25s ease, background 0.2s;
+}
+
+.energy-fill.full {
+  background: var(--energy-full);
+  animation: energy-pulse 1s ease-in-out infinite;
+}
+
+@keyframes energy-pulse {
+  0%, 100% { box-shadow: 0 0 0 var(--energy-glow); }
+  50% { box-shadow: 0 0 10px 2px var(--energy-glow); }
+}
+
+.energy-hint {
+  font-size: 11px;
+  color: var(--controls-color);
+}
+
+.slow-indicator {
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 12px;
+  color: var(--value-color);
 }
 
 /* ---- Controles ---- */
@@ -208,10 +265,6 @@ kbd {
   border-radius: 4px;
 }
 
-.overlay.hidden {
-  display: none;
-}
-
 .overlay-box {
   text-align: center;
   display: flex;
@@ -249,4 +302,86 @@ kbd {
 
 #restart-btn:hover {
   background: var(--btn-hover);
+}
+
+/* ---- Menú de habilidades ---- */
+.skill-box {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-width: 300px;
+  padding: 8px;
+}
+
+.skill-title {
+  text-align: center;
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: 2px;
+  color: var(--overlay-score-color);
+}
+
+.skill-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.skill-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  background: var(--skill-bg);
+  border: 1px solid var(--skill-border);
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.skill-item:hover,
+.skill-item.selected {
+  background: var(--skill-selected);
+}
+
+.skill-item.disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.skill-key {
+  background: var(--kbd-bg);
+  border: 1px solid var(--kbd-border);
+  border-radius: 3px;
+  padding: 1px 6px;
+  font-size: 11px;
+  color: var(--kbd-color);
+}
+
+.skill-icon {
+  font-size: 18px;
+}
+
+.skill-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.skill-name {
+  font-size: 13px;
+  color: var(--fg);
+  font-weight: 600;
+}
+
+.skill-desc {
+  font-size: 11px;
+  color: var(--controls-color);
+}
+
+.skill-hint {
+  text-align: center;
+  font-size: 11px;
+  color: var(--controls-color);
 }
